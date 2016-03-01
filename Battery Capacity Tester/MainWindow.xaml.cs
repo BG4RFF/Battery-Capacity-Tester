@@ -13,15 +13,23 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using System.IO.Ports;
+using System.Collections.ObjectModel;
 namespace Battery_Capacity_Tester
 {
-    
+
     /// <summary>
     /// Interaction logic for MainWindow.xaml
     /// </summary>
     public partial class MainWindow : Window
     {
         System.IO.Ports.SerialPort _serialPort;
+        string currentFile = "";
+        Boolean fileStarted = false;
+        Boolean filePaused = false;
+        DateTime lastReading, startTime;
+
+        ObservableCollection<MeasurementObject> pastReadings;// = new List<MeasurementObject> { };
+        MeasurementObject latestRecording;
         public MainWindow()
         {
             InitializeComponent();
@@ -31,26 +39,181 @@ namespace Battery_Capacity_Tester
         {
             if (CBPortsSelection.SelectedIndex >= 0)
             {
-                string portName = (string)CBPortsSelection.Items[CBPortsSelection.SelectedIndex];
-                _serialPort = new SerialPort(portName, 115200);
-                _serialPort.DataReceived += _serialPort_DataReceived;
+                if (((string)btnConnectToReLoad.Content) == "Connect")
+                {
+                    string portName = (string)CBPortsSelection.Items[CBPortsSelection.SelectedIndex];
+                    _serialPort = new SerialPort(portName, 115200);
+                    _serialPort.DataReceived += _serialPort_DataReceived;
+                    _serialPort.Open();
+                    DateTime start = DateTime.Now;
+                    while (lastReading == null)
+                    {
+                        if ((DateTime.Now - start).TotalSeconds > 3)
+                            _serialPort.WriteLine("monitor 500");//send the monitor command
+                        System.Threading.Thread.Sleep(1000);
+                    }
+                    vStopUpDown.IsEnabled = true;
+                    iSetUpDown.IsEnabled = true;
+                    btnStartStopLogging.IsEnabled = true;
+                    btnpause.IsEnabled = true;
+                    btnConnectToReLoad.Content = "Disconnect";
+                }
+                else
+                {
+                    _serialPort.DataReceived -= _serialPort_DataReceived;
+                    lock (_serialPort)
+                    {
+                        _serialPort.Close();
+                        _serialPort = null;
+                    }
+                    btnConnectToReLoad.Content = "Connect";
+                }
             }
         }
 
         void _serialPort_DataReceived(object sender, SerialDataReceivedEventArgs e)
         {
             //we have recieved data
+            while (_serialPort.BytesToRead > 0)
+            {
+                string rec = _serialPort.ReadLine().Replace("\r", "").Replace("\n", "");
+                string[] words = rec.Split(' ');
+                switch (words[0])
+                {
+                    case "read":
+                        {
+                            lastReading = DateTime.Now;
+                            if (!filePaused && fileStarted)
+                            {//file isnt paused, log results
+                                addreading(words);
+                            }
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+        private void addreading(string[] data)
+        {//process the incoming data
+            double voltage, current, mah, mwh;
+            voltage = current = mah = mwh = 0;
+            current = double.Parse(data[1]) / 1000;
+            voltage = double.Parse(data[2]) / 1000;
+            mah = double.Parse(data[3]) / 1000;
+            mwh = double.Parse(data[4]) / 1000;
+
+            MeasurementObject m = new MeasurementObject(DateTime.Now, voltage, current, mah, mwh);
+            //add the entry to the list
+            latestRecording = m;
+            pastReadings.Add(m);
+            updateDisplay();
+            //write it out to the save file
+            m.Append(currentFile, startTime);
+            
+        }
+        private void updateDisplay()
+        {
+            lblCurrentVoltage.Dispatcher.Invoke(new Action(() => lblCurrentVoltage.Content = string.Format("{0} V", latestRecording.Voltage)));
+            lblCurrentCurrent.Dispatcher.Invoke(new Action(() => lblCurrentCurrent.Content = string.Format("{0} A", latestRecording.Current)));
+            lblCurrentCapacity.Dispatcher.Invoke(new Action(() => lblCurrentCapacity.Content = string.Format("{0} mAh", latestRecording.mAh)));
+            lblCurrentWattHours.Dispatcher.Invoke(new Action(() => lblCurrentWattHours.Content = string.Format("{0} mWh", latestRecording.mWh)));
+            lblCurrentRuntime.Dispatcher.Invoke(new Action(() =>  lblCurrentRuntime.Content = string.Format("{0}", ((lastReading - startTime).TotalSeconds/60))));
+            
 
         }
-
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
             CBPortsSelection.Items.Clear();
             foreach (var port in System.IO.Ports.SerialPort.GetPortNames())
                 CBPortsSelection.Items.Add(port);
             if (CBPortsSelection.Items.Count > 0)
-                CBPortsSelection.SelectedIndex = 1;
+                CBPortsSelection.SelectedIndex = 0;
 
+        }
+
+        private void btnStartStopLogging_Click(object sender, RoutedEventArgs e)
+        {
+            if (((string)btnStartStopLogging.Content) == "Start")
+            {//starting logging
+                if (txtFileName.Text.Length > 0)
+                {
+                    if (!System.IO.Directory.Exists("Results"))
+                        System.IO.Directory.CreateDirectory("Results");
+                    if (!System.IO.Directory.Exists("Results\\" + txtFileName.Text + "\\"))
+                        System.IO.Directory.CreateDirectory("Results\\" + txtFileName.Text + "\\");
+
+                    string fName = "Results\\" + txtFileName.Text + "\\" + iSetUpDown.Value.ToString() + ".csv";
+                    if (System.IO.File.Exists(fName))
+                    {
+                        MessageBoxResult result = MessageBox.Show("Overwrite Existing File?", "Confirmation", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                        if (result == MessageBoxResult.No)
+                        {
+                            return;
+                        }
+                    }
+                    //if we get here then the user is okay to overwrite the file
+                    currentFile = fName;
+                    using (System.IO.StreamWriter sw = new System.IO.StreamWriter(currentFile, false))//no append here
+                    {
+                        sw.WriteLine(String.Format("Recording,{0}", txtFileName.Text));
+                        sw.WriteLine(String.Format("Current Setpoint,{0}", iSetUpDown.Value));
+                        sw.WriteLine(String.Format("Low Voltage Stop,{0}", vStopUpDown.Value));
+
+                    }
+                    startTime = DateTime.Now;
+                    
+                    _serialPort.WriteLine("set " + iSetUpDown.Value.ToString());
+                    _serialPort.WriteLine("uvlo " + vStopUpDown.Value.ToString());
+                    iSetUpDown.IsEnabled = false;
+                    vStopUpDown.IsEnabled = false;
+                    pastReadings = new ObservableCollection<MeasurementObject> { };
+                    chart.DataContext = pastReadings;
+                    btnStartStopLogging.Content = "Stop";
+                    fileStarted = true; filePaused = false;
+                }
+            }
+            else
+            {//stopping logging
+                fileStarted = false; filePaused = false;
+
+                iSetUpDown.IsEnabled = true;
+                vStopUpDown.IsEnabled = true;
+                btnStartStopLogging.Content = "Start";
+            }
+        }
+
+        private void btnpause_Click(object sender, RoutedEventArgs e)
+        {
+
+        }
+    }
+    class MeasurementObject
+    {
+        public DateTime CaptureTime { get; set; }
+        public double Voltage { get; set; }
+        public double Current { get; set; }
+        public double mAh { get; set; }
+        public double mWh { get; set; }
+        public MeasurementObject(DateTime time, double voltage, double current, double mah, double mwh)
+        {
+            Voltage = voltage;
+            CaptureTime = time;
+            Current = current;
+            mAh = mah;
+            mWh = mwh;
+        }
+        public string toString(DateTime startTime)
+        {
+            return String.Format("{0},{1},{2},{3},{4}", (CaptureTime - startTime).TotalSeconds, Voltage, Current, mAh, mWh);
+        }
+        public void Append(string fileName, DateTime startTime)
+        {
+            using (System.IO.StreamWriter sw = new System.IO.StreamWriter(fileName, true))
+            {
+                sw.WriteLine(toString(startTime));
+
+            }
         }
     }
 }
