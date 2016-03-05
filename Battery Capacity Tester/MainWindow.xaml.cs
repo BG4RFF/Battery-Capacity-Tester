@@ -14,6 +14,7 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using System.IO.Ports;
 using System.Collections.ObjectModel;
+using System.Windows.Controls.DataVisualization.Charting;
 namespace Battery_Capacity_Tester
 {
 
@@ -26,13 +27,15 @@ namespace Battery_Capacity_Tester
         string currentFile = "";
         Boolean fileStarted = false;
         Boolean filePaused = false;
+        Boolean portOpened = false;
         DateTime lastReading, startTime;
 
-        ObservableCollection<MeasurementObject> pastReadings;// = new List<MeasurementObject> { };
+        ObservableCollection<MeasurementObject> pastReadings = new ObservableCollection<MeasurementObject> { };
         MeasurementObject latestRecording;
         public MainWindow()
         {
             InitializeComponent();
+           
         }
 
         private void btnConnectToReLoad_Click(object sender, RoutedEventArgs e)
@@ -46,10 +49,15 @@ namespace Battery_Capacity_Tester
                     _serialPort.DataReceived += _serialPort_DataReceived;
                     _serialPort.Open();
                     DateTime start = DateTime.Now;
-                    while (lastReading == null)
+                    while (lastReading == null || (DateTime.Now - lastReading).TotalSeconds > 3)
                     {
                         if ((DateTime.Now - start).TotalSeconds > 3)
                             _serialPort.WriteLine("monitor 500");//send the monitor command
+                        if ((DateTime.Now - start).TotalSeconds > 10)
+                        {
+                            _serialPort.Close();
+                            return;
+                        }
                         System.Threading.Thread.Sleep(1000);
                     }
                     vStopUpDown.IsEnabled = true;
@@ -57,6 +65,7 @@ namespace Battery_Capacity_Tester
                     btnStartStopLogging.IsEnabled = true;
                     btnpause.IsEnabled = true;
                     btnConnectToReLoad.Content = "Disconnect";
+                    portOpened = true;
                 }
                 else
                 {
@@ -65,7 +74,8 @@ namespace Battery_Capacity_Tester
                     {
                         _serialPort.Close();
                         _serialPort = null;
-                    }
+                    } 
+                    portOpened = false;
                     btnConnectToReLoad.Content = "Connect";
                 }
             }
@@ -83,10 +93,9 @@ namespace Battery_Capacity_Tester
                     case "read":
                         {
                             lastReading = DateTime.Now;
-                            if (!filePaused && fileStarted)
-                            {//file isnt paused, log results
+                            //file isnt paused, log results
                                 addreading(words);
-                            }
+                            
                         }
                         break;
                     default:
@@ -98,29 +107,43 @@ namespace Battery_Capacity_Tester
         {//process the incoming data
             double voltage, current, mah, mwh;
             voltage = current = mah = mwh = 0;
-            current = double.Parse(data[1]) / 1000;
+            current = double.Parse(data[1]);
             voltage = double.Parse(data[2]) / 1000;
             mah = double.Parse(data[3]) / 1000;
             mwh = double.Parse(data[4]) / 1000;
 
-            MeasurementObject m = new MeasurementObject(DateTime.Now, voltage, current, mah, mwh);
+            MeasurementObject m = new MeasurementObject(DateTime.Now,startTime, voltage, current, mah, mwh);
             //add the entry to the list
             latestRecording = m;
-            pastReadings.Add(m);
+            if (m.Current != 0 && fileStarted && !filePaused)
+            {
+
+                lock (pastReadings)
+                {
+                    try
+                    {
+                        Application.Current.Dispatcher.BeginInvoke(new Action(() => pastReadings.Add(m)));
+                    }
+                    catch { }
+                    //   pastReadings.Add(m);
+                    m.Append(currentFile, startTime);
+                }
+                
+                //write it out to the save file
+                
+            }
             updateDisplay();
-            //write it out to the save file
-            m.Append(currentFile, startTime);
-            
         }
         private void updateDisplay()
         {
-            lblCurrentVoltage.Dispatcher.Invoke(new Action(() => lblCurrentVoltage.Content = string.Format("{0} V", latestRecording.Voltage)));
-            lblCurrentCurrent.Dispatcher.Invoke(new Action(() => lblCurrentCurrent.Content = string.Format("{0} A", latestRecording.Current)));
-            lblCurrentCapacity.Dispatcher.Invoke(new Action(() => lblCurrentCapacity.Content = string.Format("{0} mAh", latestRecording.mAh)));
-            lblCurrentWattHours.Dispatcher.Invoke(new Action(() => lblCurrentWattHours.Content = string.Format("{0} mWh", latestRecording.mWh)));
-            lblCurrentRuntime.Dispatcher.Invoke(new Action(() =>  lblCurrentRuntime.Content = string.Format("{0}", ((lastReading - startTime).TotalSeconds/60))));
-            
-
+            if (portOpened)
+            {
+                lblCurrentVoltage.Dispatcher.Invoke(new Action(() => lblCurrentVoltage.Content = string.Format("{0} V", latestRecording.Voltage)));
+                lblCurrentCurrent.Dispatcher.Invoke(new Action(() => lblCurrentCurrent.Content = string.Format("{0} A", latestRecording.Current / 1000)));
+                lblCurrentCapacity.Dispatcher.Invoke(new Action(() => lblCurrentCapacity.Content = string.Format("{0} mAh", latestRecording.mAh)));
+                lblCurrentWattHours.Dispatcher.Invoke(new Action(() => lblCurrentWattHours.Content = string.Format("{0} mWh", latestRecording.mWh)));
+                lblCurrentRuntime.Dispatcher.Invoke(new Action(() => lblCurrentRuntime.Content = string.Format("{0}", ((lastReading - startTime).TotalSeconds / 60))));
+            }
         }
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
@@ -159,15 +182,15 @@ namespace Battery_Capacity_Tester
                         sw.WriteLine(String.Format("Recording,{0}", txtFileName.Text));
                         sw.WriteLine(String.Format("Current Setpoint,{0}", iSetUpDown.Value));
                         sw.WriteLine(String.Format("Low Voltage Stop,{0}", vStopUpDown.Value));
-
+                        sw.WriteLine("Seconds, Voltage, Current, mAh, mWh");
                     }
                     startTime = DateTime.Now;
-                    
+
                     _serialPort.WriteLine("set " + iSetUpDown.Value.ToString());
                     _serialPort.WriteLine("uvlo " + vStopUpDown.Value.ToString());
                     iSetUpDown.IsEnabled = false;
                     vStopUpDown.IsEnabled = false;
-                    pastReadings = new ObservableCollection<MeasurementObject> { };
+                    pastReadings.Clear();
                     chart.DataContext = pastReadings;
                     btnStartStopLogging.Content = "Stop";
                     fileStarted = true; filePaused = false;
@@ -187,16 +210,41 @@ namespace Battery_Capacity_Tester
         {
 
         }
+
+        /// <summary>
+        /// used to turn axis on and off
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void CheckBox_Click(object sender, RoutedEventArgs e)
+        {
+            CheckBox chk = (sender as CheckBox);
+            LineSeries ls = chart.Series.Cast<LineSeries>().Where(s => s.Title.ToString() == chk.Tag.ToString()).ElementAtOrDefault(0);
+            if (chk.IsChecked.Value)
+                chk.Opacity = ls.Opacity = 1;
+            else
+            {
+                chk.Opacity = 0.5;
+                ls.Opacity = 0;
+            }
+            
+        }
+
+        
     }
     class MeasurementObject
     {
+        public DateTime startTime;
+        public double TimeStamp { get { return (CaptureTime - startTime).TotalSeconds; } }
         public DateTime CaptureTime { get; set; }
         public double Voltage { get; set; }
         public double Current { get; set; }
         public double mAh { get; set; }
         public double mWh { get; set; }
-        public MeasurementObject(DateTime time, double voltage, double current, double mah, double mwh)
+        public MeasurementObject(DateTime time,DateTime start, double voltage, double current, double mah, double mwh)
         {
+
+            startTime = start;
             Voltage = voltage;
             CaptureTime = time;
             Current = current;

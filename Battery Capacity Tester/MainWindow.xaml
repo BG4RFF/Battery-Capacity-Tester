@@ -5,6 +5,30 @@
          xmlns:Custom="http://schemas.microsoft.com/wpf/2008/toolkit" 
         xmlns:chartingToolkit="clr-namespace:System.Windows.Controls.DataVisualization.Charting;assembly=System.Windows.Controls.DataVisualization.Toolkit"
         Title="Battery Capacity Tester" Height="350" Width="525" Loaded="Window_Loaded">
+    <Window.Resources>
+        
+        <Style x:Key="LegendItemStyle" TargetType="chartingToolkit:LegendItem">
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="chartingToolkit:LegendItem">
+                        <CheckBox Click="CheckBox_Click" Cursor="Hand" IsChecked="true" Content="{TemplateBinding Content}" Tag="{TemplateBinding Content}">
+                            <CheckBox.Template>
+                                <ControlTemplate TargetType="CheckBox">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Rectangle Width="8" Height="8" Fill="{Binding Background}" Stroke="{Binding BorderBrush}" 
+                                                   StrokeThickness="1" Margin="0,0,3,0" />
+                                        <Label Content="{TemplateBinding Content}" />
+                                    </StackPanel>
+                                </ControlTemplate>
+                            </CheckBox.Template>
+                        </CheckBox>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+    </Window.Resources>
     <Grid >
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
@@ -12,17 +36,28 @@
             <ColumnDefinition Width="80"/>
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
-            <RowDefinition Height="25"/><!-- The Connection com port-->
-            <RowDefinition Height="30"/><!--  Start Stop-->
-            <RowDefinition Height="30"/><!-- The battery -->
-            <RowDefinition Height="30"/><!-- The Voltage -->
-            <RowDefinition Height="30"/><!-- The Current -->
-            <RowDefinition Height="30"/><!-- The mAh -->
-            <RowDefinition Height="30"/><!-- The mWh -->
-            <RowDefinition Height="30"/><!-- The Time -->
-            <RowDefinition Height="30"/>            <!-- The Time -->
-            <RowDefinition Height="30"/>            <!-- The Time -->
-            <RowDefinition Height="*"/>            <!-- The Time -->
+            <RowDefinition Height="25"/>
+            <!-- The Connection com port-->
+            <RowDefinition Height="30"/>
+            <!--  Start Stop-->
+            <RowDefinition Height="30"/>
+            <!-- The battery -->
+            <RowDefinition Height="30"/>
+            <!-- The Voltage -->
+            <RowDefinition Height="30"/>
+            <!-- The Current -->
+            <RowDefinition Height="30"/>
+            <!-- The mAh -->
+            <RowDefinition Height="30"/>
+            <!-- The mWh -->
+            <RowDefinition Height="30"/>
+            <!-- The Time -->
+            <RowDefinition Height="30"/>
+            <!-- The Time -->
+            <RowDefinition Height="30"/>
+            <!-- The Time -->
+            <RowDefinition Height="*"/>
+            <!-- The Time -->
         </Grid.RowDefinitions>
         <Button Grid.Row="0" Grid.Column="2" Name="btnConnectToReLoad" Click="btnConnectToReLoad_Click" Content="Connect"/>
         <ComboBox Grid.Row="0" Grid.Column="1" Name="CBPortsSelection" />
@@ -34,21 +69,126 @@
         <xctk:IntegerUpDown Grid.Row="2" Grid.Column="2" Name="iSetUpDown" Value="300" Minimum="0" Maximum="6000" IsEnabled="False"/>
         <Label Grid.Row="3" Grid.Column="1" Content="Name : "/>
         <TextBox Grid.Row="3" Grid.Column="2" Text ="Battery1" Name="txtFileName"/>
-        <Label Grid.Row="5" Grid.Column="1" Content="Voltage :"/>
+        <Label Grid.Row="5" Grid.Column="1" Content="Voltage :" />
         <Label Grid.Row="5" Grid.Column="2" Content="0 mV" Name="lblCurrentVoltage"/>
-        <Label Grid.Row="6" Grid.Column="1" Content="Current :"/>
+        <Label Grid.Row="6" Grid.Column="1" Content="Current :" />
         <Label Grid.Row="6" Grid.Column="2" Content="0 mA" Name="lblCurrentCurrent"/>
-        <Label Grid.Row="7" Grid.Column="1" Content="mAh :"/>
+        <Label Grid.Row="7" Grid.Column="1" Content="mAh :" />
         <Label Grid.Row="7" Grid.Column="2" Content="0 mAh" Name="lblCurrentCapacity"/>
-        <Label Grid.Row="8" Grid.Column="1" Content="mWh :"/>
+        <Label Grid.Row="8" Grid.Column="1" Content="mWh :" />
         <Label Grid.Row="8" Grid.Column="2" Content="0 mWh" Name="lblCurrentWattHours"/>
         <Label Grid.Row="9" Grid.Column="1" Content="Runtime(m) :"/>
         <Label Grid.Row="9" Grid.Column="2" Content="0" Name="lblCurrentRuntime"/>
 
-        <chartingToolkit:Chart  Name="chart" Title="Curve" Grid.RowSpan="20" Grid.Column="0">
+        <chartingToolkit:Chart  Name="chart" Grid.RowSpan="20" Grid.Column="0">
+
+            <chartingToolkit:LineSeries  DependentValuePath="Voltage"
+            IndependentValuePath="TimeStamp" ItemsSource="{Binding}" Title="Voltage"  LegendItemStyle="{StaticResource LegendItemStyle}">
+                <chartingToolkit:LineSeries.DependentRangeAxis>
+                    <chartingToolkit:LinearAxis
+                            Orientation="Y"
+                            Minimum="0"
+                         Interval="1.5"
+                            Title="Current"
+                            ShowGridLines="false"/>
+                </chartingToolkit:LineSeries.DependentRangeAxis>
+                <chartingToolkit:LineSeries.DataPointStyle>
+                    <Style TargetType="chartingToolkit:LineDataPoint">
+                        <Setter Property="BorderThickness" Value="0" />
+                        <Setter Property="Background" Value="Red"/>
+                        <Setter Property="IsTabStop"  Value="False" />
+                        <Setter Property="Width" Value="0" />
+                        <Setter Property="Height"  Value="0" />
+                        <Setter  Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="chartingToolkit:LineDataPoint">
+                                    <Grid x:Name="Root" Opacity="0" />
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </chartingToolkit:LineSeries.DataPointStyle>
+            </chartingToolkit:LineSeries>
             <chartingToolkit:LineSeries  DependentValuePath="Current"
-            IndependentValuePath="CaptureTime" ItemsSource="{Binding}"
-            IsSelectionEnabled="True"/>
+            IndependentValuePath="TimeStamp" ItemsSource="{Binding}" Title="Current"  LegendItemStyle="{StaticResource LegendItemStyle}">
+                <chartingToolkit:LineSeries.DependentRangeAxis>
+                    <chartingToolkit:LinearAxis
+                             Orientation="Y"
+                             Minimum="0"
+                             Title="Voltage"
+                             ShowGridLines="false"/>
+                </chartingToolkit:LineSeries.DependentRangeAxis>
+                <chartingToolkit:LineSeries.DataPointStyle>
+                    <Style TargetType="chartingToolkit:LineDataPoint">
+                        <Setter Property="BorderThickness" Value="0" />
+                        <Setter Property="Background" Value="Green"/>
+                        <Setter Property="IsTabStop"  Value="False" />
+                        <Setter Property="Width" Value="0" />
+                        <Setter Property="Height"  Value="0" />
+                        <Setter  Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="chartingToolkit:LineDataPoint">
+                                    <Grid x:Name="Root" Opacity="0" />
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </chartingToolkit:LineSeries.DataPointStyle>
+            </chartingToolkit:LineSeries>
+            <chartingToolkit:LineSeries  DependentValuePath="mAh"
+            IndependentValuePath="TimeStamp" ItemsSource="{Binding}" Title="mAh"  LegendItemStyle="{StaticResource LegendItemStyle}">
+                <chartingToolkit:LineSeries.DependentRangeAxis>
+                    <chartingToolkit:LinearAxis
+                            Orientation="Y"
+                            Minimum="0"
+                            Title="mAh"
+                            ShowGridLines="true"/>
+                </chartingToolkit:LineSeries.DependentRangeAxis>
+                <chartingToolkit:LineSeries.DataPointStyle>
+                    <Style TargetType="chartingToolkit:LineDataPoint">
+                        <Setter Property="BorderThickness" Value="0" />
+                        <Setter Property="Background" Value="Blue"/>
+                        <Setter Property="IsTabStop"  Value="False" />
+                        <Setter Property="Width" Value="0" />
+                        <Setter Property="Height"  Value="0" />
+                        <Setter  Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="chartingToolkit:LineDataPoint">
+                                    <Grid x:Name="Root" Opacity="0" />
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </chartingToolkit:LineSeries.DataPointStyle>
+            </chartingToolkit:LineSeries>
+            <chartingToolkit:LineSeries  DependentValuePath="mWh"
+            IndependentValuePath="TimeStamp" ItemsSource="{Binding}" Title="mWh"  LegendItemStyle="{StaticResource LegendItemStyle}">
+                <chartingToolkit:LineSeries.DependentRangeAxis>
+                    <chartingToolkit:LinearAxis
+                            Orientation="Y"
+                            Minimum="0"
+                            Title="mWh"
+                            ShowGridLines="false"/>
+                </chartingToolkit:LineSeries.DependentRangeAxis>
+                <chartingToolkit:LineSeries.DataPointStyle>
+                    <Style TargetType="chartingToolkit:LineDataPoint">
+                        <Setter Property="BorderThickness" Value="0" />
+                        <Setter Property="Background" Value="YellowGreen"/>
+                        <Setter Property="IsTabStop"  Value="False" />
+                        <Setter Property="Width" Value="0" />
+                        <Setter Property="Height"  Value="0" />
+                        <Setter  Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="chartingToolkit:LineDataPoint">
+                                    <Grid x:Name="Root" Opacity="0" />
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </chartingToolkit:LineSeries.DataPointStyle>
+            </chartingToolkit:LineSeries>
+
         </chartingToolkit:Chart>
     </Grid>
+
 </Window>
