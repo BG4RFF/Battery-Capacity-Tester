@@ -89,7 +89,7 @@
                             Orientation="Y"
                             Minimum="0"
                          Interval="1.5"
-                            Title="Current"
+                            Title="Voltage"
                             ShowGridLines="false"/>
                 </chartingToolkit:LineSeries.DependentRangeAxis>
                 <chartingToolkit:LineSeries.DataPointStyle>
@@ -115,7 +115,7 @@
                     <chartingToolkit:LinearAxis
                              Orientation="Y"
                              Minimum="0"
-                             Title="Voltage"
+                             Title="Current"
                              ShowGridLines="false"/>
                 </chartingToolkit:LineSeries.DependentRangeAxis>
                 <chartingToolkit:LineSeries.DataPointStyle>

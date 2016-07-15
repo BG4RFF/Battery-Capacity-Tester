@@ -35,7 +35,7 @@ namespace Battery_Capacity_Tester
         public MainWindow()
         {
             InitializeComponent();
-           
+
         }
 
         private void btnConnectToReLoad_Click(object sender, RoutedEventArgs e)
@@ -52,7 +52,7 @@ namespace Battery_Capacity_Tester
                     while (lastReading == null || (DateTime.Now - lastReading).TotalSeconds > 3)
                     {
                         if ((DateTime.Now - start).TotalSeconds > 3)
-                            _serialPort.WriteLine("monitor 500");//send the monitor command
+                            _serialPort.WriteLine("monitor 1000");//send the monitor command
                         if ((DateTime.Now - start).TotalSeconds > 10)
                         {
                             _serialPort.Close();
@@ -74,7 +74,7 @@ namespace Battery_Capacity_Tester
                     {
                         _serialPort.Close();
                         _serialPort = null;
-                    } 
+                    }
                     portOpened = false;
                     btnConnectToReLoad.Content = "Connect";
                 }
@@ -94,8 +94,8 @@ namespace Battery_Capacity_Tester
                         {
                             lastReading = DateTime.Now;
                             //file isnt paused, log results
-                                addreading(words);
-                            
+                            addreading(words);
+
                         }
                         break;
                     default:
@@ -112,7 +112,7 @@ namespace Battery_Capacity_Tester
             mah = double.Parse(data[3]) / 1000;
             mwh = double.Parse(data[4]) / 1000;
 
-            MeasurementObject m = new MeasurementObject(DateTime.Now,startTime, voltage, current, mah, mwh);
+            MeasurementObject m = new MeasurementObject(DateTime.Now, startTime, voltage, current, mah, mwh);
             //add the entry to the list
             latestRecording = m;
             if (m.Current != 0 && fileStarted && !filePaused)
@@ -122,17 +122,40 @@ namespace Battery_Capacity_Tester
                 {
                     try
                     {
-                        Application.Current.Dispatcher.BeginInvoke(new Action(() => pastReadings.Add(m)));
+                        Application.Current.Dispatcher.BeginInvoke(new Action(() => addReading(m)));
                     }
                     catch { }
                     //   pastReadings.Add(m);
                     m.Append(currentFile, startTime);
                 }
-                
+
                 //write it out to the save file
-                
+
             }
             updateDisplay();
+        }
+        private void addReading(MeasurementObject m)
+        {
+            lock (pastReadings)
+            {
+                if (pastReadings.Count % ((int)this.Width/2) == 0)
+                {
+                    List<MeasurementObject> oldData = new List<MeasurementObject> { };
+                    oldData.AddRange(pastReadings);
+                    pastReadings.Clear();
+                    for (int i = 0; i < oldData.Count; i += 2)
+                    {
+                        var a = oldData[i];
+                        var b = oldData[i];
+                        if (i != oldData.Count)
+                            b = oldData[i + 1];
+                        MeasurementObject mn = new MeasurementObject(b.CaptureTime, a.startTime, (a.Voltage + b.Voltage) / 2, (a.Current + b.Current) / 2, b.mAh, b.mWh);
+                        pastReadings.Add(mn);
+                    }
+
+                }
+                pastReadings.Add(m);
+            }
         }
         private void updateDisplay()
         {
@@ -199,7 +222,7 @@ namespace Battery_Capacity_Tester
             else
             {//stopping logging
                 fileStarted = false; filePaused = false;
-
+                _serialPort.WriteLine("set 0");
                 iSetUpDown.IsEnabled = true;
                 vStopUpDown.IsEnabled = true;
                 btnStartStopLogging.Content = "Start";
@@ -227,10 +250,10 @@ namespace Battery_Capacity_Tester
                 chk.Opacity = 0.5;
                 ls.Opacity = 0;
             }
-            
+
         }
 
-        
+
     }
     class MeasurementObject
     {
@@ -241,7 +264,8 @@ namespace Battery_Capacity_Tester
         public double Current { get; set; }
         public double mAh { get; set; }
         public double mWh { get; set; }
-        public MeasurementObject(DateTime time,DateTime start, double voltage, double current, double mah, double mwh)
+
+        public MeasurementObject(DateTime time, DateTime start, double voltage, double current, double mah, double mwh)
         {
 
             startTime = start;
